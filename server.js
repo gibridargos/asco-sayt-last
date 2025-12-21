@@ -9,17 +9,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// 🔴 Railway proxy uchun
+app.set("trust proxy", 1);
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "public")));
 
-
 // =============================
 // BACKEND URL CONFIG
 // =============================
-const BACKEND_AUTH = "http://localhost:8085/api/v1/auth";
-const BACKEND_BOT = "http://localhost:8085/api/v1/bot";
-
+const BACKEND_AUTH = "https://asco.up.railway.app/api/v1/auth";
+const BACKEND_BOT  = "https://asco.up.railway.app/api/v1/bot";
 
 // =============================
 // Helper — JSON forward
@@ -38,7 +40,6 @@ async function forwardJson(url, body, token = null, method = "POST") {
   return { status: res.status, json };
 }
 
-
 // =============================
 // AUTH — REGISTER
 // =============================
@@ -54,7 +55,6 @@ app.post("/auth/register", async (req, res) => {
   }
 });
 
-
 // =============================
 // AUTH — LOGIN (JWT cookie)
 // =============================
@@ -68,10 +68,11 @@ app.post("/auth/login", async (req, res) => {
     if (json?.result?.token) {
       res.cookie("jwt", json.result.token, {
         httpOnly: true,
-        sameSite: "lax",
-        secure: false,
+        secure: true,      // 🔴 Railway HTTPS
+        sameSite: "none",  // 🔴 frontend ↔ backend
         maxAge: 7 * 24 * 60 * 60 * 1000
       });
+
       return res.json({ success: true });
     }
 
@@ -81,15 +82,17 @@ app.post("/auth/login", async (req, res) => {
   }
 });
 
-
 // =============================
 // AUTH — LOGOUT
 // =============================
 app.post("/auth/logout", (req, res) => {
-  res.clearCookie("jwt", { httpOnly: true, sameSite: "lax" });
+  res.clearCookie("jwt", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none"
+  });
   res.json({ success: true });
 });
-
 
 // =============================
 // JWT MIDDLEWARE
@@ -101,16 +104,17 @@ function protect(req, res, next) {
   next();
 }
 
-
 // =============================
 // BOT API PROXY
 // =============================
 app.use("/bot", protect);
 
-
-// ===== GET Proxy =====
+// ===== GET =====
 app.get("/bot/*", async (req, res) => {
-  const backendUrl = BACKEND_BOT + req.path.replace("/bot", "") + (req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "");
+  const backendUrl =
+    BACKEND_BOT +
+    req.path.replace("/bot", "") +
+    (req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "");
 
   const response = await fetch(backendUrl, {
     method: "GET",
@@ -121,24 +125,31 @@ app.get("/bot/*", async (req, res) => {
   res.status(response.status).json(json);
 });
 
-
-// ===== POST Proxy =====
+// ===== POST =====
 app.post("/bot/*", async (req, res) => {
   const backendUrl = BACKEND_BOT + req.path.replace("/bot", "");
-  const { status, json } = await forwardJson(backendUrl, req.body, req.token, "POST");
+  const { status, json } = await forwardJson(
+    backendUrl,
+    req.body,
+    req.token,
+    "POST"
+  );
   res.status(status).json(json);
 });
 
-
-// ===== PUT Proxy =====
+// ===== PUT =====
 app.put("/bot/*", async (req, res) => {
   const backendUrl = BACKEND_BOT + req.path.replace("/bot", "");
-  const { status, json } = await forwardJson(backendUrl, req.body, req.token, "PUT");
+  const { status, json } = await forwardJson(
+    backendUrl,
+    req.body,
+    req.token,
+    "PUT"
+  );
   res.status(status).json(json);
 });
 
-
-// ===== DELETE Proxy =====
+// ===== DELETE =====
 app.delete("/bot/*", async (req, res) => {
   const backendUrl = BACKEND_BOT + req.path.replace("/bot", "");
 
@@ -151,7 +162,6 @@ app.delete("/bot/*", async (req, res) => {
   res.status(response.status).json(json);
 });
 
-
 // =============================
 // SPA fallback
 // =============================
@@ -159,11 +169,10 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-
 // =============================
 // START SERVER
 // =============================
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Proxy server running on http://localhost:${PORT}`);
+  console.log(`🚀 Proxy server running on port ${PORT}`);
 });
