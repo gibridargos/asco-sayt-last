@@ -3,6 +3,7 @@ import express from "express";
 import fetch from "node-fetch";
 import cookieParser from "cookie-parser";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -10,11 +11,13 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// 🔴 Railway proxy uchun
+// 🔴 Railway proxy
 app.set("trust proxy", 1);
 
 app.use(express.json());
 app.use(cookieParser());
+
+// 🔥 Static files
 app.use(express.static(path.join(__dirname, "public")));
 
 // =============================
@@ -56,7 +59,7 @@ app.post("/auth/register", async (req, res) => {
 });
 
 // =============================
-// AUTH — LOGIN (JWT cookie)
+// AUTH — LOGIN
 // =============================
 app.post("/auth/login", async (req, res) => {
   try {
@@ -68,8 +71,8 @@ app.post("/auth/login", async (req, res) => {
     if (json?.result?.token) {
       res.cookie("jwt", json.result.token, {
         httpOnly: true,
-        secure: true,      // 🔴 Railway HTTPS
-        sameSite: "none",  // 🔴 frontend ↔ backend
+        secure: true,
+        sameSite: "none",
         maxAge: 7 * 24 * 60 * 60 * 1000
       });
 
@@ -163,10 +166,27 @@ app.delete("/bot/*", async (req, res) => {
 });
 
 // =============================
-// SPA fallback
+// 🔥 HTML PAGE ROUTER
+// =============================
+app.get("/:page", (req, res, next) => {
+  const page = req.params.page;
+
+  if (page === "auth" || page === "bot") return next();
+
+  const filePath = path.join(__dirname, "public", "html", `${page}.html`);
+
+  if (fs.existsSync(filePath)) {
+    return res.sendFile(filePath);
+  }
+
+  next();
+});
+
+// =============================
+// 🔥 DEFAULT FALLBACK → index.html
 // =============================
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  res.sendFile(path.join(__dirname, "public", "html", "index.html"));
 });
 
 // =============================
